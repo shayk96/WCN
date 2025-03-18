@@ -20,14 +20,38 @@
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "UnreachableCode"
 
+/**
+ * @def WC_BATCH
+ * @brief Batch size for completion queue polling
+ */
 #define WC_BATCH 1
+
+/**
+ * @def NUM_PROCESSES
+ * @brief Number of processes in the distributed computation
+ */
 #define NUM_PROCESSES 4
+
+/**
+ * @def ITERATIONS
+ * @brief Number of iterations for the all-reduce algorithm
+ */
 #define ITERATIONS 6
+
+/**
+ * @def START_GATHER
+ * @brief Iteration number at which to start the gather phase
+ */
 #define START_GATHER 3
+
+/**
+ * @def START_NODE
+ * @brief ID of the starting node in the communication pattern
+ */
 #define START_NODE 0
 
 /// @brief Work Request IDs for RDMA operations.
-enum {
+enum{
     PINGPONG_RECV_WRID = 1,  ///< WRID for receive operations.
     PINGPONG_SEND_WRID = 2,  ///< WRID for send operations.
 };
@@ -36,7 +60,7 @@ enum {
  * @enum OPERATION
  * @brief Enumeration representing different arithmetic operations.
  */
-enum OPERATION {
+enum OPERATION{
     ADDITION = 0,        ///< Addition operation.
     MULTIPLICATION = 1,  ///< Multiplication operation.
 } typedef OPERATION;
@@ -45,7 +69,7 @@ enum OPERATION {
  * @enum DATA_TYPE
  * @brief Enumeration representing different data types.
  */
-enum DATA_TYPE {
+enum DATA_TYPE{
     INT = 0,   ///< Integer data type.
     FLOAT = 1, ///< Floating-point data type.
 } typedef DATA_TYPE;
@@ -57,7 +81,7 @@ static int page_size;
  * @struct shared_context
  * @brief Represents an RDMA shared context with necessary resources.
  */
-struct shared_context {
+struct shared_context{
     struct ibv_context *context;         ///< Infiniband verbs context.
     struct ibv_comp_channel *channel;    ///< Completion event channel.
 };
@@ -66,7 +90,7 @@ struct shared_context {
  * @struct pingpong_context
  * @brief Represents the RDMA context for a ping-pong test.
  */
-struct pingpong_context {
+struct pingpong_context{
     struct ibv_context *context;      ///< RDMA device context.
     struct ibv_comp_channel *channel; ///< Completion event channel.
     struct ibv_pd *pd;                ///< Protection domain.
@@ -84,7 +108,7 @@ struct pingpong_context {
  * @struct pingpong_dest
  * @brief Represents a remote endpoint in the RDMA ping-pong test.
  */
-struct pingpong_dest {
+struct pingpong_dest{
     int lid;       ///< Local Identifier (LID) of the remote node.
     int qpn;       ///< Queue Pair Number (QPN).
     int psn;       ///< Packet Sequence Number (PSN).
@@ -99,13 +123,20 @@ struct pingpong_dest {
  */
 enum ibv_mtu pp_mtu_to_enum(int mtu)
 {
-  switch (mtu) {
-      case 256:  return IBV_MTU_256;
-      case 512:  return IBV_MTU_512;
-      case 1024: return IBV_MTU_1024;
-      case 2048: return IBV_MTU_2048;
-      case 4096: return IBV_MTU_4096;
-      default:   return -1; ///< Return invalid value for unsupported MTU.
+  switch (mtu)
+    {
+      case 256:
+        return IBV_MTU_256;
+      case 512:
+        return IBV_MTU_512;
+      case 1024:
+        return IBV_MTU_1024;
+      case 2048:
+        return IBV_MTU_2048;
+      case 4096:
+        return IBV_MTU_4096;
+      default:
+        return -1; ///< Return invalid value for unsupported MTU.
     }
 }
 
@@ -151,7 +182,8 @@ void wire_gid_to_gid(const char *wgid, union ibv_gid *gid)
   uint32_t v32;
   int i;
 
-  for (tmp[8] = 0, i = 0; i < 4; ++i) {
+  for (tmp[8] = 0, i = 0; i < 4; ++i)
+    {
       memcpy(tmp, wgid + i * 8, 8);
       sscanf(tmp, "%x", &v32);
       *(uint32_t *) (&gid->raw[i * 4]) = ntohl(v32);
@@ -201,7 +233,8 @@ static int pp_connect_ctx(struct pingpong_context *ctx, int port, int my_psn, en
   };
 
   // If the remote destination uses a global identifier (GID)
-  if (dest->gid.global.interface_id) {
+  if (dest->gid.global.interface_id)
+    {
       attr.ah_attr.is_global = 1;
       attr.ah_attr.grh.hop_limit = 1;
       attr.ah_attr.grh.dgid = dest->gid;
@@ -216,7 +249,8 @@ static int pp_connect_ctx(struct pingpong_context *ctx, int port, int my_psn, en
                     IBV_QP_DEST_QPN |
                     IBV_QP_RQ_PSN |
                     IBV_QP_MAX_DEST_RD_ATOMIC |
-                    IBV_QP_MIN_RNR_TIMER)) {
+                    IBV_QP_MIN_RNR_TIMER))
+    {
       fprintf(stderr, "Failed to modify QP to RTR\n");
       return 1;
     }
@@ -254,15 +288,18 @@ static struct pingpong_dest *pp_client_exch_dest(const char *servername, int por
     return NULL;
 
   n = getaddrinfo(servername, service, &hints, &res);
-  if (n < 0) {
+  if (n < 0)
+    {
       fprintf(stderr, "%s for %s:%d\n", gai_strerror(n), servername, port);
       free(service);
       return NULL;
     }
 
-  for (t = res; t; t = t->ai_next) {
+  for (t = res; t; t = t->ai_next)
+    {
       sockfd = socket(t->ai_family, t->ai_socktype, t->ai_protocol);
-      if (sockfd >= 0) {
+      if (sockfd >= 0)
+        {
           if (!connect(sockfd, t->ai_addr, t->ai_addrlen))
             break;
           close(sockfd);
@@ -273,19 +310,22 @@ static struct pingpong_dest *pp_client_exch_dest(const char *servername, int por
   freeaddrinfo(res);
   free(service);
 
-  if (sockfd < 0) {
+  if (sockfd < 0)
+    {
       fprintf(stderr, "Couldn't connect to %s:%d\n", servername, port);
       return NULL;
     }
 
   gid_to_wire_gid(&my_dest->gid, gid);
   sprintf(msg, "%04x:%06x:%06x:%s", my_dest->lid, my_dest->qpn, my_dest->psn, gid);
-  if (write(sockfd, msg, sizeof msg) != sizeof msg) {
+  if (write(sockfd, msg, sizeof msg) != sizeof msg)
+    {
       fprintf(stderr, "Couldn't send local address\n");
       goto out;
     }
 
-  if (read(sockfd, msg, sizeof msg) != sizeof msg) {
+  if (read(sockfd, msg, sizeof msg) != sizeof msg)
+    {
       perror("client read");
       fprintf(stderr, "Couldn't read remote address\n");
       goto out;
@@ -322,7 +362,8 @@ static struct pingpong_dest *pp_client_exch_dest(const char *servername, int por
  * @return Pointer to a newly allocated `pingpong_dest` structure containing the remote connection details,
  *         or `NULL` on failure.
  */
-static struct pingpong_dest *pp_server_exch_dest(struct pingpong_context *ctx, int ib_port, enum ibv_mtu mtu, int port, int sl, const struct pingpong_dest *my_dest, int sgid_idx)
+static struct pingpong_dest *
+pp_server_exch_dest(struct pingpong_context *ctx, int ib_port, enum ibv_mtu mtu, int port, int sl, const struct pingpong_dest *my_dest, int sgid_idx)
 {
   struct addrinfo *res, *t;
   struct addrinfo hints = {
@@ -341,15 +382,18 @@ static struct pingpong_dest *pp_server_exch_dest(struct pingpong_context *ctx, i
     return NULL;
 
   n = getaddrinfo(NULL, service, &hints, &res);
-  if (n < 0) {
+  if (n < 0)
+    {
       fprintf(stderr, "%s for port %d\n", gai_strerror(n), port);
       free(service);
       return NULL;
     }
 
-  for (t = res; t; t = t->ai_next) {
+  for (t = res; t; t = t->ai_next)
+    {
       sockfd = socket(t->ai_family, t->ai_socktype, t->ai_protocol);
-      if (sockfd >= 0) {
+      if (sockfd >= 0)
+        {
           n = 1;
           setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &n, sizeof n);
           if (!bind(sockfd, t->ai_addr, t->ai_addrlen))
@@ -362,7 +406,8 @@ static struct pingpong_dest *pp_server_exch_dest(struct pingpong_context *ctx, i
   freeaddrinfo(res);
   free(service);
 
-  if (sockfd < 0) {
+  if (sockfd < 0)
+    {
       fprintf(stderr, "Couldn't listen to port %d\n", port);
       return NULL;
     }
@@ -370,15 +415,17 @@ static struct pingpong_dest *pp_server_exch_dest(struct pingpong_context *ctx, i
   listen(sockfd, 1);
   connfd = accept(sockfd, NULL, 0);
   close(sockfd);
-  if (connfd < 0) {
+  if (connfd < 0)
+    {
       fprintf(stderr, "accept() failed\n");
       return NULL;
     }
 
   n = read(connfd, msg, sizeof msg);
-  if (n != sizeof msg) {
+  if (n != sizeof msg)
+    {
       perror("server read");
-      fprintf(stderr, "%d/%d: Couldn't read remote address\n", n, (int)sizeof msg);
+      fprintf(stderr, "%d/%d: Couldn't read remote address\n", n, (int) sizeof msg);
       goto out;
     }
 
@@ -389,7 +436,8 @@ static struct pingpong_dest *pp_server_exch_dest(struct pingpong_context *ctx, i
   sscanf(msg, "%x:%x:%x:%s", &rem_dest->lid, &rem_dest->qpn, &rem_dest->psn, gid);
   wire_gid_to_gid(gid, &rem_dest->gid);
 
-  if (pp_connect_ctx(ctx, ib_port, my_dest->psn, mtu, sl, rem_dest, sgid_idx)) {
+  if (pp_connect_ctx(ctx, ib_port, my_dest->psn, mtu, sl, rem_dest, sgid_idx))
+    {
       fprintf(stderr, "Couldn't connect to remote QP\n");
       free(rem_dest);
       rem_dest = NULL;
@@ -398,7 +446,8 @@ static struct pingpong_dest *pp_server_exch_dest(struct pingpong_context *ctx, i
 
   gid_to_wire_gid(&my_dest->gid, gid);
   sprintf(msg, "%04x:%06x:%06x:%s", my_dest->lid, my_dest->qpn, my_dest->psn, gid);
-  if (write(connfd, msg, sizeof msg) != sizeof msg) {
+  if (write(connfd, msg, sizeof msg) != sizeof msg)
+    {
       fprintf(stderr, "Couldn't send local address\n");
       free(rem_dest);
       rem_dest = NULL;
@@ -412,8 +461,25 @@ static struct pingpong_dest *pp_server_exch_dest(struct pingpong_context *ctx, i
   return rem_dest;
 }
 
-
-static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,int rx_depth, int tx_depth, int port, int use_event, int is_server, struct shared_context* shared_ctx)
+/**
+ * @brief Initializes a pingpong context with the necessary RDMA resources.
+ *
+ * This function creates and initializes a pingpong_context structure with the
+ * necessary RDMA resources, including protection domain, memory region, completion queue,
+ * and queue pair.
+ *
+ * @param ib_dev The RDMA device to use.
+ * @param size The size of the buffer to allocate for data transfer.
+ * @param rx_depth The receive queue depth.
+ * @param tx_depth The send queue depth.
+ * @param port The RDMA port to use.
+ * @param use_event Whether to use events for completion notification.
+ * @param is_server Whether this endpoint is a server.
+ * @param shared_ctx Pointer to shared context containing reusable resources.
+ * @return Pointer to the initialized pingpong_context or NULL on failure.
+ */
+static struct pingpong_context *
+pp_init_ctx(struct ibv_device *ib_dev, int size, int rx_depth, int tx_depth, int port, int use_event, int is_server, struct shared_context *shared_ctx)
 {
   struct pingpong_context *ctx;
   ctx = calloc(1, sizeof *ctx);
@@ -428,25 +494,29 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
   ctx->routs = rx_depth;
 
   ctx->buf = malloc(roundup(size, page_size));
-  if (!ctx->buf) {
+  if (!ctx->buf)
+    {
       fprintf(stderr, "Couldn't allocate work buf.\n");
       return NULL;
     }
 
   ctx->pd = ibv_alloc_pd(ctx->context);
-  if (!ctx->pd) {
+  if (!ctx->pd)
+    {
       fprintf(stderr, "Couldn't allocate PD\n");
       return NULL;
     }
   ctx->mr = ibv_reg_mr(ctx->pd, ctx->buf, size, IBV_ACCESS_LOCAL_WRITE);
-  if (!ctx->mr) {
+  if (!ctx->mr)
+    {
       fprintf(stderr, "Couldn't register MR\n");
       return NULL;
     }
 
   ctx->cq = ibv_create_cq(ctx->context, rx_depth + tx_depth, NULL,
                           ctx->channel, 0);
-  if (!ctx->cq) {
+  if (!ctx->cq)
+    {
       fprintf(stderr, "Couldn't create CQ\n");
       return NULL;
     }
@@ -465,7 +535,8 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
     };
 
     ctx->qp = ibv_create_qp(ctx->pd, &attr);
-    if (!ctx->qp)  {
+    if (!ctx->qp)
+      {
         fprintf(stderr, "Couldn't create QP\n");
         return NULL;
       }
@@ -481,10 +552,11 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
     };
 
     if (ibv_modify_qp(ctx->qp, &attr,
-                      IBV_QP_STATE              |
-                      IBV_QP_PKEY_INDEX         |
-                      IBV_QP_PORT               |
-                      IBV_QP_ACCESS_FLAGS)) {
+                      IBV_QP_STATE |
+                      IBV_QP_PKEY_INDEX |
+                      IBV_QP_PORT |
+                      IBV_QP_ACCESS_FLAGS))
+      {
         fprintf(stderr, "Failed to modify QP to INIT\n");
         return NULL;
       }
@@ -493,36 +565,49 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
   return ctx;
 }
 
+/**
+ * @brief Closes an RDMA context and releases all associated resources.
+ *
+ * @param ctx Pointer to the pingpong_context to close.
+ * @return 0 on success, 1 on failure.
+ */
 int pp_close_ctx(struct pingpong_context *ctx)
 {
-  if (ibv_destroy_qp(ctx->qp)) {
+  if (ibv_destroy_qp(ctx->qp))
+    {
       fprintf(stderr, "Couldn't destroy QP\n");
       return 1;
     }
 
-  if (ibv_destroy_cq(ctx->cq)) {
+  if (ibv_destroy_cq(ctx->cq))
+    {
       fprintf(stderr, "Couldn't destroy CQ\n");
       return 1;
     }
 
-  if (ibv_dereg_mr(ctx->mr)) {
+  if (ibv_dereg_mr(ctx->mr))
+    {
       fprintf(stderr, "Couldn't deregister MR\n");
       return 1;
     }
 
-  if (ibv_dealloc_pd(ctx->pd)) {
+  if (ibv_dealloc_pd(ctx->pd))
+    {
       fprintf(stderr, "Couldn't deallocate PD\n");
       return 1;
     }
 
-  if (ctx->channel) {
-      if (ibv_destroy_comp_channel(ctx->channel)) {
+  if (ctx->channel)
+    {
+      if (ibv_destroy_comp_channel(ctx->channel))
+        {
           fprintf(stderr, "Couldn't destroy completion channel\n");
           return 1;
         }
     }
 
-  if (ibv_close_device(ctx->context)) {
+  if (ibv_close_device(ctx->context))
+    {
       fprintf(stderr, "Couldn't release context\n");
       return 1;
     }
@@ -533,6 +618,13 @@ int pp_close_ctx(struct pingpong_context *ctx)
   return 0;
 }
 
+/**
+ * @brief Posts a receive work request to a queue pair.
+ *
+ * @param ctx Pointer to the pingpong_context.
+ * @param n Number of work requests to post.
+ * @return 0 on success, error code on failure.
+ */
 static int pp_post_recv(struct pingpong_context *ctx, int n)
 {
   struct ibv_sge list = {
@@ -551,6 +643,12 @@ static int pp_post_recv(struct pingpong_context *ctx, int n)
   return ibv_post_recv(ctx->qp, &wr, &bad_wr);
 }
 
+/**
+ * @brief Posts a send work request to a queue pair.
+ *
+ * @param ctx Pointer to the pingpong_context.
+ * @return 0 on success, error code on failure.
+ */
 static int pp_post_send(struct pingpong_context *ctx)
 {
   struct ibv_sge list = {
@@ -571,28 +669,44 @@ static int pp_post_send(struct pingpong_context *ctx)
   return ibv_post_send(ctx->qp, &wr, &bad_wr);
 }
 
+/**
+ * @brief Waits for work completions on a completion queue.
+ *
+ * @param ctx Pointer to the pingpong_context.
+ * @param iters Number of iterations to perform.
+ * @return 0 on success, 1 on failure.
+ */
 int pp_wait_completions(struct pingpong_context *ctx, int iters)
 {
   struct ibv_wc wc[WC_BATCH];
   int ne, i;
 
-      do {
-          ne = ibv_poll_cq(ctx->cq, WC_BATCH, wc);
-          if (ne < 0) {
-              fprintf(stderr, "poll CQ failed %d\n", ne);
-              return 1;
-            }
+  do
+    {
+      ne = ibv_poll_cq(ctx->cq, WC_BATCH, wc);
+      if (ne < 0)
+        {
+          fprintf(stderr, "poll CQ failed %d\n", ne);
+          return 1;
+        }
 
-        } while (ne < 1);
+    }
+  while (ne < 1);
 
-  if (wc[0].status != IBV_WC_SUCCESS) {
-      fprintf(stderr, "Failed status %s (%d) for wr_id %d\n", ibv_wc_status_str(wc[0].status), wc[0].status, (int)wc[0].wr_id);
+  if (wc[0].status != IBV_WC_SUCCESS)
+    {
+      fprintf(stderr, "Failed status %s (%d) for wr_id %d\n", ibv_wc_status_str(wc[0].status), wc[0].status, (int) wc[0].wr_id);
       return -1;
     }
 
   return 0;
 }
 
+/**
+ * @brief Displays usage information for the program.
+ *
+ * @param argv0 The name of the program.
+ */
 static void usage(const char *argv0)
 {
   printf("Usage:\n");
@@ -615,8 +729,28 @@ static void usage(const char *argv0)
   printf("  -k, rank               node rank\n");
 }
 
-
-struct pingpong_dest get_dest (struct pingpong_dest *my_dest, struct pingpong_dest *rem_dest, const char *servername, int port, int ib_port, enum ibv_mtu *mtu, int sl, int gidx, char *gid, int rank, struct pingpong_context *ctx, int client)
+/**
+ * @brief Retrieves connection destination info by exchanging with remote node.
+ *
+ * This function handles the connection establishment logic for both client and server roles.
+ * It exchanges connection information with the remote node to facilitate the RDMA connection.
+ *
+ * @param my_dest Pointer to local destination information.
+ * @param rem_dest Pointer to store remote destination information.
+ * @param servername Server hostname or IP address (only used in client mode).
+ * @param port TCP port for connection exchange.
+ * @param ib_port InfiniBand port number.
+ * @param mtu Pointer to MTU enumeration.
+ * @param sl Service level.
+ * @param gidx GID index.
+ * @param gid Buffer to store GID string.
+ * @param rank Process rank.
+ * @param ctx Pointer to the pingpong context.
+ * @param client Boolean flag indicating client (true) or server (false) role.
+ * @return Local destination information.
+ */
+struct pingpong_dest
+get_dest(struct pingpong_dest *my_dest, struct pingpong_dest *rem_dest, const char *servername, int port, int ib_port, enum ibv_mtu *mtu, int sl, int gidx, char *gid, int rank, struct pingpong_context *ctx, int client)
 {
   if (client == true)
     rem_dest = pp_client_exch_dest(servername, port, my_dest);
@@ -637,33 +771,51 @@ struct pingpong_dest get_dest (struct pingpong_dest *my_dest, struct pingpong_de
   return (*my_dest);
 }
 
-
-void adjust_ctx (struct pingpong_dest *my_dest, int ib_port, int use_event, int gidx, char *gid, struct pingpong_context *ctx)
+/**
+ * @brief Adjusts the context for InfiniBand communication
+ *
+ * Configures the InfiniBand context with appropriate local identifiers,
+ * queue pair numbers, and other connection parameters needed for communication.
+ *
+ * @param my_dest Destination structure to be populated with local endpoint information
+ * @param ib_port InfiniBand port number to use
+ * @param use_event Whether to use event-based notification
+ * @param gidx Global ID index to use if RoCE is enabled
+ * @param gid Buffer to store the Global ID string representation
+ * @param ctx Pingpong context containing IB resources
+ */
+void adjust_ctx(struct pingpong_dest *my_dest, int ib_port, int use_event, int gidx, char *gid, struct pingpong_context *ctx)
 {
   if (use_event)
-    if (ibv_req_notify_cq(ctx->cq, 0)) {
+    if (ibv_req_notify_cq(ctx->cq, 0))
+      {
         fprintf(stderr, "Couldn't request CQ notification\n");
         exit(1);
       }
 
-  if (pp_get_port_info(ctx->context, ib_port, &ctx->portinfo)) {
+  if (pp_get_port_info(ctx->context, ib_port, &ctx->portinfo))
+    {
       fprintf(stderr, "Couldn't get port info\n");
       exit(1);
     }
 
   (*my_dest).lid = ctx->portinfo.lid;
-  if (ctx->portinfo.link_layer == IBV_LINK_LAYER_INFINIBAND && !(*my_dest).lid) {
+  if (ctx->portinfo.link_layer == IBV_LINK_LAYER_INFINIBAND && !(*my_dest).lid)
+    {
       fprintf(stderr, "Couldn't get local LID\n");
       exit(1);
     }
 
-  if (gidx >= 0) {
-      if (ibv_query_gid(ctx->context, ib_port, gidx, &(*my_dest).gid)) {
+  if (gidx >= 0)
+    {
+      if (ibv_query_gid(ctx->context, ib_port, gidx, &(*my_dest).gid))
+        {
           fprintf(stderr, "Could not get local gid for gid index %d\n", gidx);
           exit(1);
         }
-    } else
-    memset(&(*my_dest).gid, 0, sizeof (*my_dest).gid);
+    }
+  else
+    memset(&(*my_dest).gid, 0, sizeof(*my_dest).gid);
 
   (*my_dest).qpn = ctx->qp->qp_num;
   (*my_dest).psn = lrand48() & 0xffffff;
@@ -671,6 +823,7 @@ void adjust_ctx (struct pingpong_dest *my_dest, int ib_port, int use_event, int 
   printf("  local address:  LID 0x%04x, QPN 0x%06x, PSN 0x%06x, GID %s\n", (*my_dest).lid, (*my_dest).qpn, (*my_dest).psn, gid);
 }
 
+// Commented out functions - preserved for reference
 //void send_vec (struct pingpong_context *out_ctx, int *vec_arr, int tx_depth, int len)
 //{
 //  memcpy(out_ctx->buf, vec_arr, len * sizeof (int));
@@ -699,23 +852,49 @@ void adjust_ctx (struct pingpong_dest *my_dest, int ib_port, int use_event, int 
 //  printf("Server Done.\n");
 //}
 
-
-void copy_pair (const struct pingpong_context *out_ctx, const void *vec_arr, int index, int i, DATA_TYPE dt){
+/**
+ * @brief Copies a value-index pair into the send buffer
+ *
+ * Creates a pair of (value, index) in the outgoing buffer for transmission.
+ * This facilitates sending both the data point and its position in the array.
+ *
+ * @param out_ctx Output context containing the send buffer
+ * @param vec_arr Source array containing values to send
+ * @param index Base index in the source array
+ * @param i Offset from the base index
+ * @param dt Data type (INT or FLOAT) to determine size of data
+ */
+void copy_pair(const struct pingpong_context *out_ctx, const void *vec_arr, int index, int i, DATA_TYPE dt)
+{
 
   int size = dt == INT ? sizeof(int) : sizeof(float);
   memcpy(out_ctx->buf + (size * (2 * i)), &vec_arr[index + i], size);
   int tmp_idx = index + i;
-  memcpy(out_ctx->buf + (size * ((2 * i) + 1)) , &tmp_idx, size);
+  memcpy(out_ctx->buf + (size * ((2 * i) + 1)), &tmp_idx, size);
 }
 
-
+/**
+ * @brief Sends an array segment as pairs of (value, index)
+ *
+ * Prepares and sends a segment of the data array to the remote node,
+ * with each value accompanied by its index in the original array.
+ *
+ * @param out_ctx Output context for sending data
+ * @param vec_arr Source array containing values to send
+ * @param tx_depth Maximum number of outstanding send requests
+ * @param index Starting index in the source array
+ * @param seg Number of elements to send
+ * @param dt Data type (INT or FLOAT)
+ */
 void send_idx_pair(struct pingpong_context *out_ctx, void *vec_arr, int tx_depth, int index, int seg, DATA_TYPE dt)
 {
-  for(int i = 0 ; i < seg; i++){
-      copy_pair (out_ctx, vec_arr, index, i, dt);
+  for (int i = 0; i < seg; i++)
+    {
+      copy_pair(out_ctx, vec_arr, index, i, dt);
     }
 
-  if (pp_post_send(out_ctx)) {
+  if (pp_post_send(out_ctx))
+    {
       fprintf(stderr, "Client couldn't post send\n");
       exit(1);
     }
@@ -724,12 +903,24 @@ void send_idx_pair(struct pingpong_context *out_ctx, void *vec_arr, int tx_depth
   printf("Client Done.\n");
 }
 
-void reduce (int *vec_arr, int final, int index, int item, OPERATION op){
+/**
+ * @brief Performs reduction operation on received data
+ *
+ * Applies the specified reduction operation (addition or multiplication)
+ * to update the local array with received values.
+ *
+ * @param vec_arr Local array to update
+ * @param final Flag indicating whether this is the final reduction step
+ * @param index Position in the array to update
+ * @param item Value to use in the reduction
+ * @param op Operation to perform (ADDITION or MULTIPLICATION)
+ */
+void reduce(int *vec_arr, int final, int index, int item, OPERATION op)
+{
   switch (op)
     {
       case ADDITION:
         vec_arr[index] = (vec_arr[index] * final) + item;
-
       break;
 
       case MULTIPLICATION:
@@ -740,20 +931,34 @@ void reduce (int *vec_arr, int final, int index, int item, OPERATION op){
         break;
     }
   printf("item: %d, index: %d, final: %d\n", item, index, final);
-
 }
 
-
-void receive_idx_pair (struct pingpong_context *in_ctx, int iters, void* vec_arr, int len, int final, int seg, OPERATION op, DATA_TYPE dt)
+/**
+ * @brief Receives and processes pairs of (value, index)
+ *
+ * Receives data from a remote node as (value, index) pairs and
+ * applies the reduction operation to update the local array.
+ *
+ * @param in_ctx Input context for receiving data
+ * @param iters Number of iterations/completions to wait for
+ * @param vec_arr Local array to update
+ * @param len Length of the array
+ * @param final Flag indicating whether this is the final reduction step
+ * @param seg Number of elements expected
+ * @param op Operation to perform (ADDITION or MULTIPLICATION)
+ * @param dt Data type (INT or FLOAT)
+ */
+void receive_idx_pair(struct pingpong_context *in_ctx, int iters, void *vec_arr, int len, int final, int seg, OPERATION op, DATA_TYPE dt)
 {
-  float* tmp_arr = (float*) vec_arr;
+  float *tmp_arr = (float *) vec_arr;
 
   if (dt == INT)
     {
-      int* tmp_arr = (int *) vec_arr;
+      int *tmp_arr = (int *) vec_arr;
     }
 
-  if (pp_post_recv(in_ctx, iters)) {
+  if (pp_post_recv(in_ctx, iters))
+    {
       fprintf(stderr, "Server couldn't post receive\n");
       exit(1);
     }
@@ -761,39 +966,75 @@ void receive_idx_pair (struct pingpong_context *in_ctx, int iters, void* vec_arr
   pp_wait_completions(in_ctx, iters);
   int *received_arr = in_ctx->buf;
 
-  for(int i = 0 ; i < seg; i++){
-    int index = received_arr[(i*2)+1];
-    int item = received_arr[i*2];
+  for (int i = 0; i < seg; i++)
+    {
+      int index = received_arr[(i * 2) + 1];
+      int item = received_arr[i * 2];
       reduce(vec_arr, final, index, item, op);
       printf("item: %d, index: %d\n", item, index);
     }
-  for (int i = 0; i < len; i++){
-      dt == INT ? printf("%d,", tmp_arr[i]): printf("%f,", tmp_arr[i]);
+  for (int i = 0; i < len; i++)
+    {
+      dt == INT ? printf("%d,", tmp_arr[i]) : printf("%f,", tmp_arr[i]);
     }
   printf("\n");
   printf("Server Done.\n");
 }
 
-void pg_all_reduce (int tx_depth, int iters, int rank, void *vec_arr, int len, int tmp_len, struct pingpong_context *in_ctx, struct pingpong_context *out_ctx, OPERATION op ,DATA_TYPE dt)
+/**
+ * @brief Implements an AllReduce operation using the ring algorithm
+ *
+ * Performs a distributed AllReduce operation where each process sends a portion
+ * of its data to the next process in a ring topology, and receives data from the
+ * previous process. After multiple iterations, all processes have the complete
+ * reduced result.
+ *
+ * @param tx_depth Maximum number of outstanding send requests
+ * @param iters Number of iterations/completions to wait for
+ * @param rank Process rank/ID in the communication group
+ * @param vec_arr Local array to reduce
+ * @param len Length of the array
+ * @param tmp_len Padded length to ensure divisibility by process count
+ * @param in_ctx Input context for receiving data
+ * @param out_ctx Output context for sending data
+ * @param op Operation to perform (ADDITION or MULTIPLICATION)
+ * @param dt Data type (INT or FLOAT)
+ */
+void
+pg_all_reduce(int tx_depth, int iters, int rank, void *vec_arr, int len, int tmp_len, struct pingpong_context *in_ctx, struct pingpong_context *out_ctx, OPERATION op, DATA_TYPE dt)
 {
   int seg = tmp_len / NUM_PROCESSES;
   int final = 1;
-  for (int i = 0; i < ITERATIONS; i++){
-      if ( i == START_GATHER ) {
-        final = 0;
-      }
+  for (int i = 0; i < ITERATIONS; i++)
+    {
+      if (i == START_GATHER)
+        {
+          final = 0;
+        }
       int index = ((rank - i + tmp_len * 2) % NUM_PROCESSES) * seg;
-      if (rank == START_NODE){
-          send_idx_pair (out_ctx, vec_arr, tx_depth, index, seg, dt);
-          receive_idx_pair (in_ctx, iters, vec_arr, len, final, seg, op, dt);
-        } else {
-          receive_idx_pair (in_ctx, iters, vec_arr, len, final, seg, op, dt);
-          send_idx_pair (out_ctx, vec_arr, tx_depth, index, seg, dt);
+      if (rank == START_NODE)
+        {
+          send_idx_pair(out_ctx, vec_arr, tx_depth, index, seg, dt);
+          receive_idx_pair(in_ctx, iters, vec_arr, len, final, seg, op, dt);
+        }
+      else
+        {
+          receive_idx_pair(in_ctx, iters, vec_arr, len, final, seg, op, dt);
+          send_idx_pair(out_ctx, vec_arr, tx_depth, index, seg, dt);
         }
     }
 }
 
-
+/**
+ * @brief Main function for the AllReduce implementation
+ *
+ * Parses command line arguments, initializes InfiniBand connections,
+ * and performs the AllReduce operation among multiple processes.
+ *
+ * @param argc Number of command line arguments
+ * @param argv Command line arguments
+ * @return 0 on success, non-zero on failure
+ */
 int main(int argc, char *argv[])
 {
   struct ibv_device **dev_list;
@@ -825,7 +1066,9 @@ int main(int argc, char *argv[])
 
   srand48(getpid() * time(NULL));
 
-  while (1) {
+  // Parse command line arguments
+  while (1)
+    {
       int c;
 
       static struct option long_options[] = {
@@ -851,10 +1094,12 @@ int main(int argc, char *argv[])
       if (c == -1)
         break;
 
-      switch (c) {
+      switch (c)
+        {
           case 'p':
             port = strtol(optarg, NULL, 0);
-          if (port < 0 || port > 65535) {
+          if (port < 0 || port > 65535)
+            {
               usage(argv[0]);
               return 1;
             }
@@ -866,7 +1111,8 @@ int main(int argc, char *argv[])
 
           case 'i':
             ib_port = strtol(optarg, NULL, 0);
-          if (ib_port < 0) {
+          if (ib_port < 0)
+            {
               usage(argv[0]);
               return 1;
             }
@@ -878,7 +1124,8 @@ int main(int argc, char *argv[])
 
           case 'm':
             mtu = pp_mtu_to_enum(strtol(optarg, NULL, 0));
-          if (mtu < 0) {
+          if (mtu < 0)
+            {
               usage(argv[0]);
               return 1;
             }
@@ -910,6 +1157,7 @@ int main(int argc, char *argv[])
 
           case 'x':
             len = strtol(optarg, NULL, 0);
+          // Pad array length to be divisible by process count
           tmp_len = len % NUM_PROCESSES == 0 ? len : len + (NUM_PROCESSES - len % NUM_PROCESSES);
           if (dt == INT)
             vec_arr = calloc(tmp_len, sizeof(int));
@@ -918,8 +1166,10 @@ int main(int argc, char *argv[])
           break;
 
           case 'v':
+            // Parse comma-separated values into array
             vec_arr[0] = dt == INT ? atoi(strtok(optarg, ",")) : atof(strtok(optarg, ","));
-          for (int i = 1; i < len; i++){
+          for (int i = 1; i < len; i++)
+            {
               vec_arr[i] = dt == INT ? atoi(strtok(NULL, ",")) : atof(strtok(NULL, ","));
             }
           break;
@@ -930,7 +1180,7 @@ int main(int argc, char *argv[])
 
           case 't':
             dt = strtol(optarg, NULL, 0) == 0 ? INT : FLOAT;
-            break;
+          break;
 
           default:
             usage(argv[0]);
@@ -938,89 +1188,115 @@ int main(int argc, char *argv[])
         }
     }
 
-  for (int i = 0; i < len; i++){
+  // Print input array
+  for (int i = 0; i < len; i++)
+    {
       printf("%d,", vec_arr[i]);
     }
   printf("\n");
 
+  // Check for server name argument
   if (optind == argc - 1)
     servername = strdup(argv[optind]);
-  else if (optind < argc) {
+  else if (optind < argc)
+    {
       usage(argv[0]);
       return 1;
     }
 
   page_size = sysconf(_SC_PAGESIZE);
 
+  // Get list of InfiniBand devices
   dev_list = ibv_get_device_list(NULL);
-  if (!dev_list) {
+  if (!dev_list)
+    {
       perror("Failed to get IB devices list");
       return 1;
     }
 
-  if (!ib_devname) {
+  // Select InfiniBand device
+  if (!ib_devname)
+    {
       ib_dev = *dev_list;
-      if (!ib_dev) {
+      if (!ib_dev)
+        {
           fprintf(stderr, "No IB devices found\n");
           return 1;
         }
-    } else {
+    }
+  else
+    {
       int i;
       for (i = 0; dev_list[i]; ++i)
         if (!strcmp(ibv_get_device_name(dev_list[i]), ib_devname))
           break;
       ib_dev = dev_list[i];
-      if (!ib_dev) {
+      if (!ib_dev)
+        {
           fprintf(stderr, "IB device %s not found\n", ib_devname);
           return 1;
         }
     }
 
+  // Initialize shared context for InfiniBand communication
   struct shared_context *shared_ctx;
   shared_ctx = calloc(1, sizeof(shared_ctx));
   shared_ctx->context = ibv_open_device(ib_dev);
-  if (!shared_ctx->context) {
+  if (!shared_ctx->context)
+    {
       fprintf(stderr, "Couldn't get context for %s\n", ibv_get_device_name(ib_dev));
       return 1;
     }
 
-  if (use_event) {
+  // Set up completion channel if using event-based notification
+  if (use_event)
+    {
       shared_ctx->channel = ibv_create_comp_channel(shared_ctx->context);
-      if (!shared_ctx->channel) {
+      if (!shared_ctx->channel)
+        {
           fprintf(stderr, "Couldn't create completion channel\n");
           return 1;
         }
-    } else
+    }
+  else
     shared_ctx->channel = NULL;
 
+  // Initialize input and output contexts for bi-directional communication
   struct pingpong_context *in_ctx = pp_init_ctx(ib_dev, size, rx_depth, tx_depth, ib_port, use_event, !servername, shared_ctx);
   struct pingpong_context *out_ctx = pp_init_ctx(ib_dev, size, rx_depth, tx_depth, ib_port, use_event, !servername, shared_ctx);
 
   if (!in_ctx || !out_ctx)
     return 1;
 
+  // Set up local connection information
   adjust_ctx(&in_my_dest, ib_port, use_event, gidx, gid, in_ctx);
   adjust_ctx(&out_my_dest, ib_port, use_event, gidx, gid, out_ctx);
 
-  if (rank == START_NODE){
-      out_my_dest = get_dest (&out_my_dest, out_rem_dest, servername, port, ib_port, &mtu, sl, gidx, gid, rank, out_ctx, true);  // client = true
+  // Exchange connection information with remote nodes
+  // Start node (rank 0) acts as client first, then server
+  if (rank == START_NODE)
+    {
+      out_my_dest = get_dest(&out_my_dest, out_rem_dest, servername, port, ib_port, &mtu, sl, gidx, gid, rank, out_ctx, true);  // client = true
     }
-  else{
-      in_my_dest = get_dest (&in_my_dest, in_rem_dest, servername, port, ib_port, &mtu, sl, gidx, gid, rank, in_ctx, false);    // client = false
-    }
-
-
-  if (rank != START_NODE){
-      out_my_dest = get_dest (&out_my_dest, out_rem_dest, servername, port, ib_port, &mtu, sl, gidx, gid, rank, out_ctx, true);  // client = true
-    }
-  else {
-      in_my_dest = get_dest (&in_my_dest, in_rem_dest, servername, port, ib_port, &mtu, sl, gidx, gid, rank, in_ctx, false);    // client = false
+  else
+    {
+      in_my_dest = get_dest(&in_my_dest, in_rem_dest, servername, port, ib_port, &mtu, sl, gidx, gid, rank, in_ctx, false);    // client = false
     }
 
+  // Complete the connection setup
+  if (rank != START_NODE)
+    {
+      out_my_dest = get_dest(&out_my_dest, out_rem_dest, servername, port, ib_port, &mtu, sl, gidx, gid, rank, out_ctx, true);  // client = true
+    }
+  else
+    {
+      in_my_dest = get_dest(&in_my_dest, in_rem_dest, servername, port, ib_port, &mtu, sl, gidx, gid, rank, in_ctx, false);    // client = false
+    }
+
+  // Execute the AllReduce operation
   pg_all_reduce(tx_depth, iters, rank, vec_arr, len, tmp_len, in_ctx, out_ctx, op, dt);
 
-//////////////////////////////////////////////////////////////////////////////////
-
+  // Clean up resources
   ibv_free_device_list(dev_list);
   free(in_rem_dest);
   free(out_rem_dest);
