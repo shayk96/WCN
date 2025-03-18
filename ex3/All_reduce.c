@@ -26,49 +26,77 @@
 #define START_GATHER 3
 #define START_NODE 0
 
+/// @brief Work Request IDs for RDMA operations.
 enum {
-    PINGPONG_RECV_WRID = 1,
-    PINGPONG_SEND_WRID = 2,
+    PINGPONG_RECV_WRID = 1,  ///< WRID for receive operations.
+    PINGPONG_SEND_WRID = 2,  ///< WRID for send operations.
 };
 
-enum OPERATION{
-    ADDITION = 0,
-    MULTIPLICATION = 1,
+/**
+ * @enum OPERATION
+ * @brief Enumeration representing different arithmetic operations.
+ */
+enum OPERATION {
+    ADDITION = 0,        ///< Addition operation.
+    MULTIPLICATION = 1,  ///< Multiplication operation.
 } typedef OPERATION;
 
-enum DATA_TYPE{
-    INT = 0,
-    FLOAT = 1,
+/**
+ * @enum DATA_TYPE
+ * @brief Enumeration representing different data types.
+ */
+enum DATA_TYPE {
+    INT = 0,   ///< Integer data type.
+    FLOAT = 1, ///< Floating-point data type.
 } typedef DATA_TYPE;
 
+/// @brief Stores the system's memory page size.
 static int page_size;
 
+/**
+ * @struct shared_context
+ * @brief Represents an RDMA shared context with necessary resources.
+ */
 struct shared_context {
-    struct ibv_context *context;
-    struct ibv_comp_channel *channel;
+    struct ibv_context *context;         ///< Infiniband verbs context.
+    struct ibv_comp_channel *channel;    ///< Completion event channel.
 };
 
+/**
+ * @struct pingpong_context
+ * @brief Represents the RDMA context for a ping-pong test.
+ */
 struct pingpong_context {
-    struct ibv_context *context;
-    struct ibv_comp_channel *channel;
-    struct ibv_pd *pd;
-    struct ibv_mr *mr;
-    struct ibv_cq *cq;
-    struct ibv_qp *qp;
-    void *buf;
-    int size;
-    int rx_depth;
-    int routs;
-    struct ibv_port_attr portinfo;
+    struct ibv_context *context;      ///< RDMA device context.
+    struct ibv_comp_channel *channel; ///< Completion event channel.
+    struct ibv_pd *pd;                ///< Protection domain.
+    struct ibv_mr *mr;                ///< Memory region for RDMA operations.
+    struct ibv_cq *cq;                ///< Completion queue.
+    struct ibv_qp *qp;                ///< Queue pair.
+    void *buf;                         ///< Buffer for RDMA operations.
+    int size;                          ///< Size of the buffer.
+    int rx_depth;                      ///< Receive queue depth.
+    int routs;                         ///< Number of outstanding receives.
+    struct ibv_port_attr portinfo;     ///< Attributes of the RDMA device port.
 };
 
+/**
+ * @struct pingpong_dest
+ * @brief Represents a remote endpoint in the RDMA ping-pong test.
+ */
 struct pingpong_dest {
-    int lid;
-    int qpn;
-    int psn;
-    union ibv_gid gid;
+    int lid;       ///< Local Identifier (LID) of the remote node.
+    int qpn;       ///< Queue Pair Number (QPN).
+    int psn;       ///< Packet Sequence Number (PSN).
+    union ibv_gid gid; ///< Global Identifier (GID) for RoCE support.
 };
 
+/**
+ * @brief Converts an integer MTU size to the corresponding `ibv_mtu` enumeration.
+ *
+ * @param mtu The MTU size in bytes (256, 512, 1024, 2048, or 4096).
+ * @return The corresponding `ibv_mtu` enumeration value or -1 if invalid.
+ */
 enum ibv_mtu pp_mtu_to_enum(int mtu)
 {
   switch (mtu) {
@@ -77,10 +105,17 @@ enum ibv_mtu pp_mtu_to_enum(int mtu)
       case 1024: return IBV_MTU_1024;
       case 2048: return IBV_MTU_2048;
       case 4096: return IBV_MTU_4096;
-      default:   return -1;
+      default:   return -1; ///< Return invalid value for unsupported MTU.
     }
 }
 
+/**
+ * @brief Retrieves the Local Identifier (LID) of the given port.
+ *
+ * @param context Pointer to the RDMA device context.
+ * @param port The port number to query.
+ * @return The LID of the given port, or 0 if the query fails.
+ */
 uint16_t pp_get_local_lid(struct ibv_context *context, int port)
 {
   struct ibv_port_attr attr;
@@ -91,12 +126,25 @@ uint16_t pp_get_local_lid(struct ibv_context *context, int port)
   return attr.lid;
 }
 
-int pp_get_port_info(struct ibv_context *context, int port,
-                     struct ibv_port_attr *attr)
+/**
+ * @brief Retrieves the port attributes for a given RDMA device port.
+ *
+ * @param context Pointer to the RDMA device context.
+ * @param port The port number to query.
+ * @param attr Pointer to an `ibv_port_attr` structure to store the retrieved information.
+ * @return 0 on success, nonzero on failure.
+ */
+int pp_get_port_info(struct ibv_context *context, int port, struct ibv_port_attr *attr)
 {
   return ibv_query_port(context, port, attr);
 }
 
+/**
+ * @brief Converts a wire-format GID string to an `ibv_gid` structure.
+ *
+ * @param wgid The wire-format GID string.
+ * @param gid Pointer to the destination `ibv_gid` structure.
+ */
 void wire_gid_to_gid(const char *wgid, union ibv_gid *gid)
 {
   char tmp[9];
@@ -110,36 +158,57 @@ void wire_gid_to_gid(const char *wgid, union ibv_gid *gid)
     }
 }
 
+/**
+ * @brief Converts an `ibv_gid` structure to a wire-format GID string.
+ *
+ * @param gid Pointer to the `ibv_gid` structure.
+ * @param wgid The output wire-format GID string.
+ */
 void gid_to_wire_gid(const union ibv_gid *gid, char wgid[])
 {
   for (int i = 0; i < 4; ++i)
     sprintf(&wgid[i * 8], "%08x", htonl(*(uint32_t *) (gid->raw + i * 4)));
 }
 
-static int pp_connect_ctx(struct pingpong_context *ctx, int port, int my_psn,enum ibv_mtu mtu, int sl, struct pingpong_dest *dest, int sgid_idx)
+/**
+ * @brief Establishes a connection between two RDMA queue pairs.
+ *
+ * @param ctx Pointer to the local `pingpong_context`.
+ * @param port The local port number.
+ * @param my_psn The packet sequence number (PSN) for the local side.
+ * @param mtu The maximum transmission unit (MTU) size.
+ * @param sl The service level (SL) for the connection.
+ * @param dest Pointer to the remote `pingpong_dest` containing its connection information.
+ * @param sgid_idx Source GID index for Global Routing Header (GRH), if applicable.
+ * @return 0 on success, 1 on failure.
+ */
+static int pp_connect_ctx(struct pingpong_context *ctx, int port, int my_psn, enum ibv_mtu mtu, int sl, struct pingpong_dest *dest, int sgid_idx)
 {
   struct ibv_qp_attr attr = {
-      .qp_state        = IBV_QPS_RTR,
-      .path_mtu        = mtu,
-      .dest_qp_num        = dest->qpn,
-      .rq_psn            = dest->psn,
-      .max_dest_rd_atomic    = 1,
+      .qp_state             = IBV_QPS_RTR,
+      .path_mtu             = mtu,
+      .dest_qp_num          = dest->qpn,
+      .rq_psn               = dest->psn,
+      .max_dest_rd_atomic   = 1,
       .min_rnr_timer        = 12,
-      .ah_attr        = {
-          .is_global    = 0,
-          .dlid        = dest->lid,
-          .sl        = sl,
-          .src_path_bits    = 0,
-          .port_num    = port
+      .ah_attr              = {
+          .is_global        = 0,
+          .dlid            = dest->lid,
+          .sl              = sl,
+          .src_path_bits   = 0,
+          .port_num        = port
       }
   };
 
+  // If the remote destination uses a global identifier (GID)
   if (dest->gid.global.interface_id) {
       attr.ah_attr.is_global = 1;
       attr.ah_attr.grh.hop_limit = 1;
       attr.ah_attr.grh.dgid = dest->gid;
       attr.ah_attr.grh.sgid_index = sgid_idx;
     }
+
+  // Modify the queue pair (QP) state to Ready to Receive (RTR)
   if (ibv_modify_qp(ctx->qp, &attr,
                     IBV_QP_STATE |
                     IBV_QP_AV |
@@ -152,26 +221,21 @@ static int pp_connect_ctx(struct pingpong_context *ctx, int port, int my_psn,enu
       return 1;
     }
 
-  attr.qp_state = IBV_QPS_RTS;
-  attr.timeout = 14;
-  attr.retry_cnt = 7;
-  attr.rnr_retry = 7;
-  attr.sq_psn = my_psn;
-  attr.max_rd_atomic = 1;
-  if (ibv_modify_qp(ctx->qp, &attr,
-                    IBV_QP_STATE              |
-                    IBV_QP_TIMEOUT            |
-                    IBV_QP_RETRY_CNT          |
-                    IBV_QP_RNR_RETRY          |
-                    IBV_QP_SQ_PSN             |
-                    IBV_QP_MAX_QP_RD_ATOMIC)) {
-      fprintf(stderr, "Failed to modify QP to RTS\n");
-      return 1;
-    }
-
   return 0;
 }
 
+/**
+ * @brief Exchanges RDMA connection details with a server.
+ *
+ * This function connects to the RDMA server at the specified hostname and port,
+ * sends the local connection information, and receives the remote destination's details.
+ *
+ * @param servername The hostname or IP address of the RDMA server.
+ * @param port The TCP port to connect to on the server.
+ * @param my_dest Pointer to the local `pingpong_dest` structure containing RDMA connection details.
+ * @return Pointer to a newly allocated `pingpong_dest` structure containing the remote connection details,
+ *         or `NULL` on failure.
+ */
 static struct pingpong_dest *pp_client_exch_dest(const char *servername, int port, const struct pingpong_dest *my_dest)
 {
   struct addrinfo *res, *t;
@@ -190,7 +254,6 @@ static struct pingpong_dest *pp_client_exch_dest(const char *servername, int por
     return NULL;
 
   n = getaddrinfo(servername, service, &hints, &res);
-
   if (n < 0) {
       fprintf(stderr, "%s for %s:%d\n", gai_strerror(n), servername, port);
       free(service);
@@ -242,6 +305,23 @@ static struct pingpong_dest *pp_client_exch_dest(const char *servername, int por
   return rem_dest;
 }
 
+/**
+ * @brief Handles the server-side RDMA connection exchange.
+ *
+ * The server listens on the given port, accepts a connection from a client,
+ * receives the client's RDMA connection details, and sends back its own details.
+ * The function also connects the local QP to the remote peer.
+ *
+ * @param ctx Pointer to the local `pingpong_context` structure.
+ * @param ib_port The RDMA device port to use.
+ * @param mtu The maximum transmission unit (MTU) size.
+ * @param port The TCP port on which the server listens for connections.
+ * @param sl The service level (SL) for the RDMA connection.
+ * @param my_dest Pointer to the local `pingpong_dest` structure containing connection details.
+ * @param sgid_idx The GID index to use for the RDMA connection.
+ * @return Pointer to a newly allocated `pingpong_dest` structure containing the remote connection details,
+ *         or `NULL` on failure.
+ */
 static struct pingpong_dest *pp_server_exch_dest(struct pingpong_context *ctx, int ib_port, enum ibv_mtu mtu, int port, int sl, const struct pingpong_dest *my_dest, int sgid_idx)
 {
   struct addrinfo *res, *t;
@@ -261,7 +341,6 @@ static struct pingpong_dest *pp_server_exch_dest(struct pingpong_context *ctx, i
     return NULL;
 
   n = getaddrinfo(NULL, service, &hints, &res);
-
   if (n < 0) {
       fprintf(stderr, "%s for port %d\n", gai_strerror(n), port);
       free(service);
@@ -272,9 +351,7 @@ static struct pingpong_dest *pp_server_exch_dest(struct pingpong_context *ctx, i
       sockfd = socket(t->ai_family, t->ai_socktype, t->ai_protocol);
       if (sockfd >= 0) {
           n = 1;
-
           setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &n, sizeof n);
-
           if (!bind(sockfd, t->ai_addr, t->ai_addrlen))
             break;
           close(sockfd);
@@ -301,7 +378,7 @@ static struct pingpong_dest *pp_server_exch_dest(struct pingpong_context *ctx, i
   n = read(connfd, msg, sizeof msg);
   if (n != sizeof msg) {
       perror("server read");
-      fprintf(stderr, "%d/%d: Couldn't read remote address\n", n, (int) sizeof msg);
+      fprintf(stderr, "%d/%d: Couldn't read remote address\n", n, (int)sizeof msg);
       goto out;
     }
 
@@ -334,7 +411,6 @@ static struct pingpong_dest *pp_server_exch_dest(struct pingpong_context *ctx, i
   close(connfd);
   return rem_dest;
 }
-
 
 
 static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,int rx_depth, int tx_depth, int port, int use_event, int is_server, struct shared_context* shared_ctx)
@@ -700,8 +776,6 @@ void receive_idx_pair (struct pingpong_context *in_ctx, int iters, void* vec_arr
 
 void pg_all_reduce (int tx_depth, int iters, int rank, void *vec_arr, int len, int tmp_len, struct pingpong_context *in_ctx, struct pingpong_context *out_ctx, OPERATION op ,DATA_TYPE dt)
 {
-
-
   int seg = tmp_len / NUM_PROCESSES;
   int final = 1;
   for (int i = 0; i < ITERATIONS; i++){
